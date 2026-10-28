@@ -12,7 +12,7 @@ if(BUILD_DEBUG_DEMO)
 endif()
 find_package(OpenCV 4 REQUIRED COMPONENTS ${opencv_components})
 
-add_library(camera_motion_helpers STATIC helper.cpp)
+add_library(camera_motion_helpers STATIC helper.cpp imu.cpp)
 target_compile_features(camera_motion_helpers PUBLIC cxx_std_17)
 target_include_directories(camera_motion_helpers PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(camera_motion_helpers SYSTEM PUBLIC ${OpenCV_INCLUDE_DIRS})
@@ -20,6 +20,13 @@ target_link_libraries(camera_motion_helpers PUBLIC ${OpenCV_LIBS})
 
 add_executable(camera_motion main.cpp)
 target_link_libraries(camera_motion PRIVATE camera_motion_helpers)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(imu_test tests/imu_test.cpp)
+    target_link_libraries(imu_test PRIVATE camera_motion_helpers)
+    add_test(NAME imu_integration COMMAND imu_test)
+endif()
 
 if(BUILD_DEBUG_DEMO)
     add_executable(debug_demo debug.cpp)

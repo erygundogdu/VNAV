@@ -1,11 +1,12 @@
 #include "helper.h"
+#include "imu.h"
 #include <opencv2/imgcodecs.hpp>
 #include <algorithm>
 #include <exception>
 #include <fstream>
 #include <iostream>
 
-int main() {
+int main() try {
     const cv::Mat K = (cv::Mat_<double>(3, 3) <<
         458.654, 0.0, 367.215,
         0.0, 457.296, 248.375,
@@ -18,6 +19,15 @@ int main() {
     cv::glob("data/*.png", imagePaths);
     std::sort(imagePaths.begin(), imagePaths.end());
 
+    const auto initialState = readImuInitialState("data/imu_initial.yaml");
+    const auto originalCount = imagePaths.size();
+    imagePaths.erase(std::remove_if(imagePaths.begin(), imagePaths.end(),
+        [&](const auto& path) { return imageTimestampNs(path) < initialState.timestampNs; }),
+        imagePaths.end());
+    if (originalCount != imagePaths.size())
+        std::cerr << "Excluded " << originalCount - imagePaths.size()
+                  << " images before IMU initialization.\n";
+
     if (imagePaths.empty()) {
         std::cerr << "No PNG frames found in data/\n";
         return 1;
@@ -29,6 +39,14 @@ int main() {
         std::cerr << "Could not load: " << imagePaths[0] << '\n';
         return 1;
     }
+
+    std::vector<std::int64_t> imageTimes;
+    for (const auto& path : imagePaths) imageTimes.push_back(imageTimestampNs(path));
+    const ImuScaleEstimator imu(
+        readImuCsv("data/imu0/data.csv"), imageTimes,
+        initialState);
+    std::cerr << "Using open-loop IMU scale; initial-state errors and sensor bias cause drift.\n";
+    size_t previousFrame = 0;
 
     cv::Mat T = cv::Mat::eye(4, 4, CV_64F);
     std::ofstream csv("trajectory.csv");
@@ -51,8 +69,9 @@ int main() {
         }
 
         try {
+            const double stepScale = imu.stepScale(previousFrame, i);
             const CameraMotion motion_t =
-                estimateCameraMotion(ImagePrev, image, K, 1.0, distortion);
+                estimateCameraMotion(ImagePrev, image, K, stepScale, distortion);
 
             T = motion_t.C * T;
             cv::Mat cameraPose = T.inv();
@@ -67,6 +86,7 @@ int main() {
                 << position.y << ',' << position.z << '\n';
 
             ImagePrev = image;
+            previousFrame = i;
         } catch (const std::exception& error) {
             std::cerr << "Frame " << i << " skipped: "
                       << error.what() << '\n';
@@ -80,4 +100,7 @@ int main() {
               << skipped << " positions could not be recovered.\n";
 
     return 0;
+} catch (const std::exception& error) {
+    std::cerr << "Error: " << error.what() << '\n';
+    return 1;
 }

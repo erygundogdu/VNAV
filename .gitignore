@@ -6,6 +6,16 @@
 # Local datasets and generated output
 /data/
 /trajectory.csv
+/results/*
+# Keep the sample plots used in README.md
+!/results/trajectory_2d.jpg
+!/results/trajectory_3d.jpg
+
+# Python plotting caches and local environments
+__pycache__/
+*.py[cod]
+/.venv/
+/venv/
 
 # Binaries from earlier manual builds
 /main

@@ -1,6 +1,16 @@
 # Camera motion estimation
 
-A small C++ project for estimating camera motion from a sequence of images using OpenCV. It matches ORB features between frames, estimates the essential matrix with RANSAC, and recovers the camera pose. Positions are saved to `trajectory.csv`.
+A small C++ project for estimating camera motion from images and IMU readings using OpenCV. It matches ORB features between frames, estimates the essential matrix with RANSAC, and recovers the camera pose. An IMU integrator estimates the distance between frames. Positions are saved to `trajectory.csv`.
+
+## Sample trajectory
+
+EuRoC `V1_01_easy`, using the first ground-truth state to initialize IMU orientation, velocity, and biases. Of the 400 sample images, 21 precede initialization. The remaining 379 frames produced 283 finite positions and 96 failed poses, shown as gaps.
+
+The plots show the estimated camera trajectory in meters relative to the first processed camera pose. This run uses open-loop IMU scale; its accuracy has not been validated against ground truth.
+
+![2D camera trajectory projections in XY, XZ, and YZ](results/trajectory_2d.jpg)
+
+![3D camera trajectory with start and last valid position marked](results/trajectory_3d.jpg)
 
 ## Setup
 
@@ -40,16 +50,22 @@ Use a fresh build directory when switching computers or compilers.
 
 ## Run
 
-Put your PNG frames directly in `data/`:
+Put your PNG frames and EuRoC-format IMU readings in `data/`:
 
 ```text
 data/
-  000001.png
-  000002.png
-  000003.png
+  1403715273262142976.png
+  1403715273312143104.png
+  imu0/
+    data.csv
+  imu_initial.yaml
 ```
 
-Frames are read in filename order, so use timestamps or zero-padded names. Run from the repository root:
+Image filenames must be integer timestamps in nanoseconds, on the same clock as the IMU. The IMU CSV columns are `timestamp_ns,wx,wy,wz,ax,ay,az` (rad/s and m/s²); lines starting with `#` are skipped.
+
+Create `data/imu_initial.yaml` using `imu_initial.example.yaml` as a format reference. Supply the initial IMU-to-world rotation, world velocity, gravity, gyro and accelerometer biases, and the camera position in IMU coordinates. The template values are placeholders, not an initialization for the sample dataset. Its timestamp must be covered by the IMU readings. Images before initialization are excluded; output frame indices start at the first remaining image.
+
+Run from the repository root:
 
 ```sh
 ./build/camera_motion
@@ -59,9 +75,19 @@ With Visual Studio, the executable is usually at `build/Release/camera_motion.ex
 
 The program writes `trajectory.csv` in the current directory, with columns `frame,x,y,z`. The first position is the origin. Frames where pose recovery fails have `nan` coordinates; the reason is printed in the terminal.
 
-The calibration in `main.cpp` is for the left camera in EuRoC MAV. Change the camera matrix and distortion coefficients if you use another camera. Translation uses a fixed step scale of 1.0, so the coordinates are **not in meters**.
+The calibration in `main.cpp` is for the left camera in EuRoC MAV. Change the camera matrix, distortion coefficients, and IMU-to-camera calibration if you use another sensor.
+
+`imu.cpp` integrates angular velocity and gravity-compensated acceleration while retaining velocity between frames. `stepScale(previousFrame, currentFrame)` returns the net camera displacement in meters, including the camera's offset from the IMU. If visual pose recovery fails, the next scale spans the interval from the last successful frame.
+
+This is open-loop IMU integration, not a full visual-inertial estimator. Incorrect initial velocity, orientation, or biases cause drift; metric units do not guarantee an accurate trajectory. Don't assume zero initial velocity unless the sensor was stationary. Missing IMU coverage, out-of-order timestamps, and gaps larger than 20 ms are rejected rather than replaced with a made-up scale.
 
 Image sequences and generated CSV files are ignored by Git and are not included when you clone the repo.
+
+Run the synthetic integration checks with:
+
+```sh
+ctest --test-dir build --output-on-failure
+```
 
 ## VS Code
 

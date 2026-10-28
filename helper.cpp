@@ -112,9 +112,9 @@ CameraMotion recoverCameraMotion(
     const cv::Mat& ransacInliers,
     double stepScale
 ) {
-    if (!std::isfinite(stepScale) || stepScale <= 0.0) {
+    if (!std::isfinite(stepScale) || stepScale < 0.0) {
         throw std::invalid_argument(
-            "stepScale must be finite and positive."
+            "stepScale must be finite and nonnegative."
         );
     }
 

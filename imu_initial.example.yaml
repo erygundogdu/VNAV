@@ -1,0 +1,14 @@
+%YAML:1.0
+# TEMPLATE ONLY: replace with measured/estimated initial state before use.
+# Copy to data/imu_initial.yaml. Values refer to timestamp_ns, which must
+# be at or before the first image and inside the IMU time range.
+# Identity orientation and zero velocity below require a stationary,
+# world-aligned IMU. They are NOT a calibration for the EuRoC sample.
+timestamp_ns: "1403715273262142976"
+world_from_imu: [1., 0., 0., 0., 1., 0., 0., 0., 1.]
+velocity_world: [0., 0., 0.]
+gravity_world: [0., 0., -9.81]
+gyro_bias: [0., 0., 0.]
+accel_bias: [0., 0., 0.]
+# EuRoC cam0 origin expressed in IMU/body coordinates (T_BS translation).
+camera_position_in_imu: [-0.0216401454975, -0.064676986768, 0.00981073058949]
