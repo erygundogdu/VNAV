@@ -1,0 +1,23 @@
+/build*/
+/cmake-build-*/
+/CMakeUserPresets.json
+/compile_commands.json
+
+# Local datasets and generated output
+/data/
+/trajectory.csv
+
+# Binaries from earlier manual builds
+/main
+*.exe
+*.o
+*.obj
+
+# Local airport image assets and debug experiments
+/airport.jpg*
+/debug*
+
+# OS metadata
+*:Zone.Identifier
+.DS_Store
+Thumbs.db
