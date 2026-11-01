@@ -5,6 +5,14 @@
 
 # Local datasets and generated output
 /data/
+/MH_*/
+/EuRoC/
+/datasets/
+*.zip
+*.bag
+*.db3
+*.mcap
+*.deflate
 /trajectory.csv
 /results/*
 # Keep the sample plots used in README.md
@@ -16,6 +24,22 @@ __pycache__/
 *.py[cod]
 /.venv/
 /venv/
+/.pytest_cache/
+/.mypy_cache/
+/.ruff_cache/
+.coverage
+htmlcov/
+
+# New evaluation runs stay local; keep the README report snapshots
+/evaluation/**
+!/evaluation/ba_on/
+!/evaluation/ba_off/
+!/evaluation/ba_on/metrics.json
+!/evaluation/ba_on/trajectory.csv
+!/evaluation/ba_on/*.png
+!/evaluation/ba_off/metrics.json
+!/evaluation/ba_off/trajectory.csv
+!/evaluation/ba_off/*.png
 
 # Binaries from earlier manual builds
 /main

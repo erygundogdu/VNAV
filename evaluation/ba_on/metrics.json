@@ -1,0 +1,54 @@
+{
+  "evaluated_poses": 331,
+  "evaluated_duration_s": 16.5,
+  "gt_path_length_m": 5.85550035503414,
+  "aligned_estimated_path_length_m": 6.2031342249359716,
+  "ate_rmse_m": 0.03710691383586123,
+  "ate_mean_m": 0.030196552207499117,
+  "ate_median_m": 0.021623254175262802,
+  "ate_std_m": 0.021565975266651168,
+  "ate_p95_m": 0.06753288703807658,
+  "ate_max_m": 0.1273476351277493,
+  "aligned_endpoint_error_m": 0.12268045610052193,
+  "orientation_rmse_deg": 3.5601720383821114,
+  "rpe_interval_s": 1.0,
+  "rpe_pairs": 311,
+  "rpe_translation_rmse_m": 0.05825641717120532,
+  "rpe_rotation_rmse_deg": 3.622482202910266,
+  "bundle_adjustment": true,
+  "estimated_poses": 340,
+  "excluded_without_gt": 9,
+  "first_tracked_frame": 0,
+  "last_tracked_frame": 348,
+  "first_evaluated_frame": 18,
+  "last_evaluated_frame": 348,
+  "scale_m_per_estimated_unit": 0.10375653922396767,
+  "alignment_rotation": [
+    [
+      0.24070915041585755,
+      0.26251115372125006,
+      -0.9344233510984267
+    ],
+    [
+      0.9705849059709342,
+      -0.06023836584861862,
+      0.2331014362488588
+    ],
+    [
+      0.004903591282808954,
+      -0.9630468490430905,
+      -0.26928928931672197
+    ]
+  ],
+  "alignment_translation_m": [
+    4.596938362222284,
+    -1.990287815443945,
+    0.5171213911238051
+  ],
+  "alignment": "One global Sim(3), fitted to all timestamp-matched camera positions",
+  "gt_interpolation": "Linear body position and quaternion SLERP; no extrapolation; maximum GT gap 0.02 s",
+  "timestamp_offset_s": 0.0,
+  "alignment_nearly_collinear": false,
+  "last_requested_frame": 3039,
+  "tracking_lost": true
+}

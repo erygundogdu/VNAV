@@ -1,106 +1,163 @@
-# Camera motion estimation
+# Monocular visual odometry: MH_02_easy
 
-A small C++ project for estimating camera motion from images and IMU readings using OpenCV. It matches ORB features between frames, estimates the essential matrix with RANSAC, and recovers the camera pose. An IMU integrator estimates the distance between frames. Positions are saved to `trajectory.csv`.
+The pipeline uses ORB matching, essential-matrix initialization, triangulation,
+PnP pose estimation, and optional local bundle adjustment (BA). It returns a
+camera trajectory and a list of 3D point tuples. Loop closure and relocalization
+are not implemented.
 
-## Sample trajectory
+## Current evaluation
 
-EuRoC `V1_01_easy`, using the first ground-truth state to initialize IMU orientation, velocity, and biases. Of the 400 sample images, 21 precede initialization. The remaining 379 frames produced 283 finite positions and 96 failed poses, shown as gaps.
+This report records the saved results in
+[`evaluation/ba_on/metrics.json`](evaluation/ba_on/metrics.json).
+These numbers describe the successfully tracked segment, not the full dataset.
 
-The plots show the estimated camera trajectory in meters relative to the first processed camera pose. This run uses open-loop IMU scale; its accuracy has not been validated against ground truth.
+| Evaluation setting | Value |
+| --- | --- |
+| Sequence | EuRoC Machine Hall 02 (`MH_02_easy`), `cam0` |
+| BA | Enabled |
+| Initialization frames | 0 and 10 |
+| Last successfully tracked frame | 348; tracking lost at frame 349 |
+| Estimated poses | 340 of 3,040 dataset images, approximately 11.2% |
+| Evaluated frames | 18–348 |
+| Timestamp-matched poses | 331 |
+| Evaluated duration | 16.50 s |
+| Estimated poses excluded without GT coverage | 9 |
+| GT traveled distance in evaluated interval | 5.8555 m |
+| Aligned estimated traveled distance | 6.2031 m |
+| Alignment scale | 0.103757 m per estimated unit |
 
-![2D camera trajectory projections in XY, XZ, and YZ](results/trajectory_2d.jpg)
-
-![3D camera trajectory with start and last valid position marked](results/trajectory_3d.jpg)
-
-## Setup
-
-You need a C++17 compiler, CMake 3.16 or newer, and the OpenCV 4 C++ libraries.
-
-On Ubuntu / Debian:
-
-```sh
-sudo apt update
-sudo apt install build-essential cmake libopencv-dev
-```
-
-On macOS, install the Xcode command line tools, then:
-
-```sh
-brew install cmake opencv
-```
-
-On Windows, install Visual Studio with the **Desktop development with C++** workload, CMake, and OpenCV 4 for your compiler and architecture.
-
-## Build
-
-Run these commands from the repository root:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
-```
-
-CMake finds OpenCV automatically. If it cannot find your installation, set `OpenCV_DIR` to the folder containing `OpenCVConfig.cmake`:
-
-```sh
-cmake -S . -B build -DOpenCV_DIR="/path/to/opencv/cmake/directory"
-```
-
-Use a fresh build directory when switching computers or compilers.
-
-## Run
-
-Put your PNG frames and EuRoC-format IMU readings in `data/`:
+Ground-truth quaternions are read in EuRoC's `w, x, y, z` order and converted
+to SciPy's `x, y, z, w` order. Ground-truth body poses are converted to camera
+poses with the `T_BS` transform in `cam0/sensor.yaml`:
 
 ```text
-data/
-  1403715273262142976.png
-  1403715273312143104.png
-  imu0/
-    data.csv
-  imu_initial.yaml
+T_reference_camera = T_reference_body @ T_body_camera
+p_reference_camera = p_reference_body + R_reference_body @ t_body_camera
 ```
 
-Image filenames must be integer timestamps in nanoseconds, on the same clock as the IMU. The IMU CSV columns are `timestamp_ns,wx,wy,wz,ax,ay,az` (rad/s and m/s²); lines starting with `#` are skipped.
+Timestamps are read as integer nanoseconds. Body positions are interpolated
+linearly and orientations using quaternion SLERP, with zero timestamp offset,
+no extrapolation, and a maximum interpolation gap of 0.02 s.
 
-Create `data/imu_initial.yaml` using `imu_initial.example.yaml` as a format reference. Supply the initial IMU-to-world rotation, world velocity, gravity, gyro and accelerometer biases, and the camera position in IMU coordinates. The template values are placeholders, not an initialization for the sample dataset. Its timestamp must be covered by the IMU readings. Images before initialization are excluded; output frame indices start at the first remaining image.
+One global Sim(3) transform is fitted to all matched estimated camera centers.
+The same scale, rotation, and translation are applied throughout the interval.
+This removes the initial monocular scale/orientation/origin ambiguity; it does
+not recover independently measured metric scale or remove changing scale drift.
 
-Run from the repository root:
+## Error metrics with BA
 
-```sh
-./build/camera_motion
+| Metric | Saved result |
+| --- | ---: |
+| Absolute position error (ATE), RMSE | 0.037107 m |
+| ATE mean | 0.030197 m |
+| ATE median | 0.021623 m |
+| ATE standard deviation | 0.021566 m |
+| ATE 95th percentile | 0.067533 m |
+| ATE maximum | 0.127348 m |
+| Aligned endpoint position error | 0.122680 m |
+| Absolute orientation RMSE after alignment | 3.5602 degrees |
+| Relative translation RMSE, approximately 1 s intervals | 0.058256 m |
+| Relative rotation RMSE, approximately 1 s intervals | 3.6225 degrees |
+| Relative-pose evaluation pairs | 311 |
+
+ATE measures the Euclidean distance between aligned estimated and GT camera
+positions. Relative pose error (RPE) compares camera-to-camera motion over
+1 s, with a timestamp tolerance of 0.025 s. Endpoint error is the final aligned
+position error, not an independently measured percentage drift.
+
+The position fit is reasonably close over this short segment, but tracking
+failure and reconstruction outliers remain unresolved. These metrics do not
+establish the accuracy of the entire sequence or of the reconstructed map.
+
+## 3D ground truth and BA trajectory
+
+Both panels below use identical axes and viewing angles. Green marks the first
+evaluated pose; blue marks the last. The BA trajectory is globally aligned to GT.
+
+![Separate 3D ground-truth and BA trajectories](evaluation/ba_on/ground_truth_and_ba_3d.png)
+
+The overlay makes deviations between the same timestamp-matched poses visible:
+
+![Ground-truth and BA trajectory overlay](evaluation/ba_on/trajectory_3d.png)
+
+### Position error over time
+
+![Aligned position error over time](evaluation/ba_on/position_error.png)
+
+### Reconstruction diagnostic
+
+The point cloud is transformed with the same Sim(3) alignment. Isolated distant
+points stretch the plot axes. This is a visualization of the estimated map,
+not a comparison against ground-truth scene geometry.
+
+![Reconstructed 3D points with BA](evaluation/ba_on/points_3d.png)
+
+## Improvements in priority order
+
+These are proposed changes; they have not been implemented by this report.
+
+| Priority | Improvement | Current issue and verification |
+| --- | --- | --- |
+| 1 | Preserve geometric inlier masks | `findEssentialMat` and `recoverPose` masks are discarded. Carry them through initialization and triangulation; measure geometric inlier counts and initialization stability. |
+| 2 | Strengthen PnP validation | An absolute minimum of 15 inliers does not enforce a useful inlier fraction or image coverage. Log counts, ratios, spatial distribution, and reprojection-error percentiles; validate again after refinement. |
+| 3 | Restrict map matching using geometry | Matching searches the full landmark descriptor list. Use predicted visibility, image-position gating, and a local map to reduce ambiguous associations. |
+| 4 | Add landmark validation and culling | Points can enter the map after two-view checks without persistent support. Track observation counts, parallax, and later reprojection consistency; remove repeatedly inconsistent points and merge verified duplicates. |
+| 5 | Fix BA pose coverage | BA runs every 10 frames over a 5-frame window and fixes its oldest two poses. Only the last three poses are adjustable per call, leaving gaps. Use overlapping optimization windows or keyframe scheduling that covers all intended poses. |
+| 6 | Improve BA constraints and landmark selection | Fixing two entire poses preserves scale but also locks their errors. Review gauge constraints and select well-supported landmarks with spatial coverage; the current 500-point cap does not optimize the entire map. |
+| 7 | Make BA diagnostics complete | Print robust cost, ordinary RMSE, observation count, solver termination, evaluation count, and rejection reason for every call. Check geometry outside the optimized subset as well. |
+| 8 | Validate predictions on later frames | Test triangulated points against observations not used to create or optimize them. Low error in their creation images is insufficient evidence of accurate depth. |
+| 9 | Improve initialization checks | Feature displacement can also arise from rotation. Add explicit parallax, cheirality, and geometric-model checks; test sensitivity to the starting frame. |
+| 10 | Improve GT evaluation and comparison | Compare BA on/off over exactly the same timestamps. Add XYZ-versus-time plots, segment errors, coverage, and an initial-segment-only alignment to expose later drift. |
+| 11 | Add keyframes and recovery | Use keyframes/local maps to control growth and introduce relocalization when tracking fails. Evaluate successful tracking duration as well as trajectory error. |
+| 12 | Add loop closure and global optimization | After local tracking is reliable, add verified loop candidates, pose-graph optimization, and appropriate global BA. Monocular metric scale still requires an external reference. |
+
+## Interpreting BA logs
+
+```text
+Local BA: reprojection RMSE 0.796 -> 0.443 px
+Local BA: reprojection RMSE 0.769 -> 0.424 px
 ```
 
-With Visual Studio, the executable is usually at `build/Release/camera_motion.exe`.
+Each line compares before/after errors for one selected optimization problem.
+The next call uses different frames and observations, so its starting RMSE
+need not continue downward from the previous call's final RMSE.
 
-The program writes `trajectory.csv` in the current directory, with columns `frame,x,y,z`. The first position is the origin. Frames where pose recovery fails have `nan` coordinates; the reason is printed in the terminal.
+The printed RMSE averages squared horizontal and vertical residual components
+over `2 * number_of_observations`. The optimizer minimizes a robust soft-L1
+objective, so the logged ordinary RMSE is not the exact optimization cost.
+The implementation currently prints accepted updates only. Small local
+reprojection error does not prove correct depth, scale consistency, or tracking.
 
-The calibration in `main.cpp` is for the left camera in EuRoC MAV. Change the camera matrix, distortion coefficients, and IMU-to-camera calibration if you use another sensor.
+## BA-off results are from a different interval
 
-`imu.cpp` integrates angular velocity and gravity-compensated acceleration while retaining velocity between frames. `stepScale(previousFrame, currentFrame)` returns the net camera displacement in meters, including the camera's offset from the IMU. If visual pose recovery fails, the next scale spans the interval from the last successful frame.
+The existing [`evaluation/ba_off/metrics.json`](evaluation/ba_off/metrics.json)
+covers frames 18–79, only 62 evaluated poses over 3.05 s. Its position RMSE is
+0.067562 m. This cannot be directly compared with the 16.50 s BA-on report.
+Its absolute orientation RMSE is 173.136 degrees; inspect alignment conditioning
+and relative rotation errors before attributing this to a physical camera flip.
 
-This is open-loop IMU integration, not a full visual-inertial estimator. Incorrect initial velocity, orientation, or biases cause drift; metric units do not guarantee an accurate trajectory. Don't assume zero initial velocity unless the sensor was stationary. Missing IMU coverage, out-of-order timestamps, and gaps larger than 20 ms are rejected rather than replaced with a made-up scale.
+## Running the evaluation
 
-Image sequences and generated CSV files are ignored by Git and are not included when you clone the repo.
-
-Run the synthetic integration checks with:
-
-```sh
-ctest --test-dir build --output-on-failure
+```bash
+python test.py
+python test.py --no-ba
 ```
 
-## VS Code
+`test.py` follows `USE_BUNDLE_ADJUSTMENT` in `main.py` unless `--ba` or `--no-ba`
+is supplied. It shows plots and saves metrics, a matched trajectory CSV, and
+figures under `evaluation/ba_on` or `evaluation/ba_off`.
 
-Install the recommended **C/C++** and **CMake Tools** extensions. Run **CMake: Configure**, choose your compiler, then **CMake: Build**. The included settings let IntelliSense use the OpenCV paths found by CMake.
+For an initial comparison with the same requested interval:
 
-## Local debug demo
-
-If you have `debug.cpp` and `airport.jpg`, you can also build the ORB matching demo:
-
-```sh
-cmake -S . -B build -DBUILD_DEBUG_DEMO=ON
-cmake --build build --config Release --parallel
-./build/debug_demo
+```bash
+python test.py --ba --end-frame 80
+python test.py --no-ba --end-frame 80
 ```
 
-It opens a window showing matches between the image and a translated copy. The demo is off by default, and its source, binaries, and image assets are ignored by Git.
+If either run loses tracking, restrict both reports to their shared successful
+timestamps. Running evaluations overwrites their respective saved results;
+the numeric tables above are a snapshot of the report described here.
+
+The separate-panel figure was generated from the saved BA-on `trajectory.csv`.
+`test.py` currently regenerates the trajectory overlay, point cloud, and error
+plot; the separate-panel figure must be refreshed if the evaluated run changes.
